@@ -1,0 +1,59 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nginx-proxy-vector-config
+  namespace: sen-dev-dev-azr-k8s-sen-w2-001
+data:
+  vector.yaml: |
+    sources:
+      nginx_access_logs:
+        type: file
+        include:
+          - /var/log/nginx/access.log
+        read_from: beginning
+        
+      nginx_error_logs:
+        type: file
+        include:
+          - /var/log/nginx/error.log
+        read_from: beginning
+        
+      nginx_stream_logs:
+        type: file
+        include:
+          - /var/log/nginx/stream.log
+        read_from: beginning
+        
+      nginx_stream_error_logs:
+        type: file
+        include:
+          - /var/log/nginx/stream_error.log
+        read_from: beginning
+    
+    transforms:
+      format_syslog:
+        type: remap
+        inputs:
+          - nginx_access_logs
+          - nginx_error_logs
+        source: |
+          .message = string!(.message)
+          ts = format_timestamp!(now(), format: "%Y-%m-%dT%H:%M:%S.%fZ")
+          hostname = get_hostname!()
+          . = "<134>1 " + ts + " " + hostname + " nginx-proxy - - - " + .message
+    
+    sinks:
+      vector_endpoint:
+        type: socket
+        mode: tcp
+        inputs:
+          - format_syslog
+        address: vector-sandbox.sen-dev-dev-azr-k8s-sen-w2-001:1514
+        encoding:
+          codec: raw_message
+          raw_message:
+            enabled: true
+        tls:
+          enabled: true
+          verify_certificate: false
+
